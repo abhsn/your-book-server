@@ -11,7 +11,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-	req.send('Resale market is running...');
+	res.send('Resale market is running...');
 });
 
 app.listen(port, () => console.log('Listening to port', port));
