@@ -139,8 +139,21 @@ async function crudOperation() {
 				const user = await usersCollection.findOne({ email: decodedEmail });
 				if (user.isAdmin) {
 					const cursor = await productsCollection.find({ reported: true }).project({ buyer: 0 }).toArray();
-					console.log(cursor);
 					res.send(cursor);
+				} else {
+					res.status(403).send('forbidden');
+				}
+			}
+		})
+
+		app.get('/userType', verifyJWT, async (req, res) => {
+			const decodedEmail = req.decoded.email;
+			if (decodedEmail !== req.query.email) {
+				res.status(401).send({ message: 'unauthorized access' });
+			} else {
+				const user = await usersCollection.findOne({ email: decodedEmail });
+				if (user.userType) {
+					res.send({ userType: user.userType });
 				} else {
 					res.status(403).send('forbidden');
 				}
