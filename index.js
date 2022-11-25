@@ -27,12 +27,12 @@ const client = new MongoClient(uri);
 function verifyJWT(req, res, next) {
 	const authorization = req.headers.authorization;
 	if (!authorization) {
-		res.send(401).status({ message: 'unauthorized access' });
+		res.status(401).send({ message: 'unauthorized access' });
 	} else {
 		const token = authorization.split(' ')[1];
 		jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
 			if (err) {
-				res.send(403).status({ message: 'forbidden' });
+				res.status(403).send({ message: 'forbidden' });
 			} else {
 				req.decoded = decoded;
 				next();
@@ -93,10 +93,26 @@ async function crudOperation() {
 			}
 		})
 
+		// adds new created user account to db
 		app.post('/users', async (req, res) => {
 			const user = req.body;
 			const result = await usersCollection.insertOne(user);
 			res.send(result);
+		})
+
+		app.get('/allsellers', verifyJWT, async (req, res) => {
+			const decodedEmail = req.decoded.email;
+			if (decodedEmail !== req.query.email) {
+				res.status(401).send({ message: 'unauthorized access' });
+			} else {
+				const user = await usersCollection.findOne({ email: decodedEmail });
+				if (user.isAdmin) {
+					const cursor = await usersCollection.find({ userType: 'seller' }).project({ name: 1, email: 1 }).toArray();
+					res.send(cursor);
+				} else {
+					res.send(403).send('forbidden');
+				}
+			}
 		})
 	}
 	catch (err) {
