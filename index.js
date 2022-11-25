@@ -42,6 +42,24 @@ async function crudOperation() {
 			const categories = await cursor.toArray();
 			res.send(categories);
 		});
+
+		app.patch('/booking', async (req, res) => {
+			const buyer = req.body.buyerDetails;
+			const productId = req.body.productId;
+			const filter = { _id: ObjectId(productId) };
+			const options = { upsert: true };
+			const updateProduct = {
+				$set: {
+					buyer
+				}
+			}
+			const result = await productsCollection.updateOne(filter, updateProduct, options);
+			if (result.modifiedCount > 0) {
+				res.send({ success: true });
+			} else {
+				res.send({ success: false });
+			}
+		})
 	}
 	catch (err) {
 		console.log(err);
