@@ -114,6 +114,21 @@ async function crudOperation() {
 				}
 			}
 		})
+
+		app.get('/allbuyers', verifyJWT, async (req, res) => {
+			const decodedEmail = req.decoded.email;
+			if (decodedEmail !== req.query.email) {
+				res.status(401).send({ message: 'unauthorized access' });
+			} else {
+				const user = await usersCollection.findOne({ email: decodedEmail });
+				if (user.isAdmin) {
+					const cursor = await usersCollection.find({ userType: 'buyer' }).project({ name: 1, email: 1 }).toArray();
+					res.send(cursor);
+				} else {
+					res.send(403).send('forbidden');
+				}
+			}
+		})
 	}
 	catch (err) {
 		console.log(err);
