@@ -96,7 +96,6 @@ async function crudOperation() {
 		// adds new created user account to db
 		app.post('/users', async (req, res) => {
 			const user = req.body;
-			console.log(user);
 			const result = await usersCollection.insertOne(user);
 			res.send(result);
 		})
@@ -157,6 +156,19 @@ async function crudOperation() {
 				} else {
 					res.status(403).send('forbidden');
 				}
+			}
+		})
+
+		app.get('/myOrders', verifyJWT, async (req, res) => {
+			const decodedEmail = req.decoded.email;
+			if (decodedEmail !== req.query.email) {
+				res.status(401).send({ message: 'unauthorized access' });
+			} else {
+				const query = {
+					'buyer.email': decodedEmail
+				};
+				const products = await productsCollection.find(query).toArray();
+				res.send(products);
 			}
 		})
 	}
