@@ -96,6 +96,7 @@ async function crudOperation() {
 		// adds new created user account to db
 		app.post('/users', async (req, res) => {
 			const user = req.body;
+			console.log(user);
 			const result = await usersCollection.insertOne(user);
 			res.send(result);
 		})
@@ -110,7 +111,7 @@ async function crudOperation() {
 					const cursor = await usersCollection.find({ userType: 'seller' }).project({ name: 1, email: 1 }).toArray();
 					res.send(cursor);
 				} else {
-					res.send(403).send('forbidden');
+					res.status(403).send('forbidden');
 				}
 			}
 		})
@@ -125,7 +126,23 @@ async function crudOperation() {
 					const cursor = await usersCollection.find({ userType: 'buyer' }).project({ name: 1, email: 1 }).toArray();
 					res.send(cursor);
 				} else {
-					res.send(403).send('forbidden');
+					res.status(403).send('forbidden');
+				}
+			}
+		})
+
+		app.get('/allreported', verifyJWT, async (req, res) => {
+			const decodedEmail = req.decoded.email;
+			if (decodedEmail !== req.query.email) {
+				res.status(401).send({ message: 'unauthorized access' });
+			} else {
+				const user = await usersCollection.findOne({ email: decodedEmail });
+				if (user.isAdmin) {
+					const cursor = await productsCollection.find({ reported: true }).project({ buyer: 0 }).toArray();
+					console.log(cursor);
+					res.send(cursor);
+				} else {
+					res.status(403).send('forbidden');
 				}
 			}
 		})
