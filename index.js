@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { MongoClient, ObjectId } = require('mongodb');
+const jwt = require('jsonwebtoken');
 
 const port = process.env.PORT || 5000;
 
@@ -59,6 +60,17 @@ async function crudOperation() {
 				res.send({ success: true });
 			} else {
 				res.send({ success: false });
+			}
+		})
+
+		app.get('/jwt', async (req, res) => {
+			const email = req.query.email;
+			const user = await usersCollection.findOne({ email });
+			if (user) {
+				const token = jwt.sign({ email }, process.env.ACCESS_TOKEN, { expiresIn: '7d' });
+				res.send({ accesstToken: token });
+			} else {
+				res.status(403).send({ message: 'forbidden' });
 			}
 		})
 
