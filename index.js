@@ -23,6 +23,25 @@ app.get('/', (req, res) => {
 const uri = process.env.DB_URL;
 const client = new MongoClient(uri);
 
+// verify jwt
+function verifyJWT(req, res, next) {
+	const authorization = req.headers.authorization;
+	if (!authorization) {
+		res.send(401).status({ message: 'unauthorized access' });
+	} else {
+		const token = authorization.split(' ')[1];
+		jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
+			if (err) {
+				res.send(403).status({ message: 'forbidden' });
+			} else {
+				req.decoded = decoded;
+				next();
+			}
+		});
+	}
+}
+
+// function to create, read, update and delete data in database
 async function crudOperation() {
 	try {
 		const categoriesCollection = client.db("resale-market").collection('categories');
@@ -38,7 +57,7 @@ async function crudOperation() {
 		})
 
 		// sends items of specific category
-		app.get('/category/:id', async (req, res) => {
+		app.get('/category/:id', verifyJWT, async (req, res) => {
 			const query = { categoryId: req.params.id };
 			const cursor = productsCollection.find(query);
 			const categories = await cursor.toArray();
@@ -68,7 +87,7 @@ async function crudOperation() {
 			const user = await usersCollection.findOne({ email });
 			if (user) {
 				const token = jwt.sign({ email }, process.env.ACCESS_TOKEN, { expiresIn: '7d' });
-				res.send({ accesstToken: token });
+				res.send({ accessToken: token });
 			} else {
 				res.status(403).send({ message: 'forbidden' });
 			}
