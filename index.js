@@ -26,6 +26,7 @@ async function crudOperation() {
 	try {
 		const categoriesCollection = client.db("resale-market").collection('categories');
 		const productsCollection = client.db('resale-market').collection('products');
+		const usersCollection = client.db('resale-market').collection('users');
 
 		// sends all categories
 		app.get('/categories', async (req, res) => {
@@ -59,6 +60,12 @@ async function crudOperation() {
 			} else {
 				res.send({ success: false });
 			}
+		})
+
+		app.post('/users', async (req, res) => {
+			const user = req.body;
+			const result = await usersCollection.insertOne(user);
+			res.send(result);
 		})
 	}
 	catch (err) {
