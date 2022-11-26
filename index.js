@@ -106,7 +106,7 @@ async function crudOperation() {
 				res.status(401).send({ message: 'unauthorized access' });
 			} else {
 				const user = await usersCollection.findOne({ email: decodedEmail });
-				if (user.isAdmin) {
+				if (user.userType === 'admin') {
 					const cursor = await usersCollection.find({ userType: 'seller' }).project({ name: 1, email: 1 }).toArray();
 					res.send(cursor);
 				} else {
@@ -121,7 +121,7 @@ async function crudOperation() {
 				res.status(401).send({ message: 'unauthorized access' });
 			} else {
 				const user = await usersCollection.findOne({ email: decodedEmail });
-				if (user.isAdmin) {
+				if (user.userType === 'admin') {
 					const cursor = await usersCollection.find({ userType: 'buyer' }).project({ name: 1, email: 1 }).toArray();
 					res.send(cursor);
 				} else {
@@ -136,7 +136,7 @@ async function crudOperation() {
 				res.status(401).send({ message: 'unauthorized access' });
 			} else {
 				const user = await usersCollection.findOne({ email: decodedEmail });
-				if (user.isAdmin) {
+				if (user.userType === 'admin') {
 					const cursor = await productsCollection.find({ reported: true }).project({ buyer: 0 }).toArray();
 					res.send(cursor);
 				} else {
