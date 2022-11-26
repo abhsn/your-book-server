@@ -26,6 +26,7 @@ const client = new MongoClient(uri);
 // verify jwt
 function verifyJWT(req, res, next) {
 	const authorization = req.headers.authorization;
+	// console.log(authorization);
 	if (!authorization) {
 		res.status(401).send({ message: 'unauthorized access' });
 	} else {
@@ -124,8 +125,12 @@ async function crudOperation() {
 		// adds new created user account to db
 		app.post('/users', async (req, res) => {
 			const user = req.body;
-			const result = await usersCollection.insertOne(user);
-			res.send(result);
+			if (user.userType === 'buyer' || user.userType === 'seller') {
+				const result = await usersCollection.insertOne(user);
+				res.send(result);
+			} else {
+				res.status(403).send('forbidden');
+			}
 		})
 
 		app.get('/allsellers', verifyJWT, async (req, res) => {
@@ -266,6 +271,23 @@ async function crudOperation() {
 				}
 			} else {
 				res.status(403).send('forbidden');
+			}
+		})
+
+		app.post('/addItem', verifyJWT, async (req, res) => {
+			if (req.decoded.email === req.body.sellerEmail) {
+				const product = { ...req.body };
+				const category = await categoriesCollection.findOne({ _id: ObjectId(product.categoryId) });
+				product.categoryName = category.name;
+				product.time = new Date().getTime();
+				const result = await productsCollection.insertOne(product);
+				if (result.acknowledged) {
+					res.json({ success: true });
+				} else {
+					res.json({ success: false });
+				}
+			} else {
+				res.status(401).send('unauthorized access');
 			}
 		})
 
