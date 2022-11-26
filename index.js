@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { MongoClient, ObjectId } = require('mongodb');
 const jwt = require('jsonwebtoken');
+const Stripe = require('stripe');
 
 const port = process.env.PORT || 5000;
 
@@ -14,7 +15,6 @@ require('dotenv').config();
 // middleware
 app.use(cors());
 app.use(express.json());
-
 
 app.get('/', (req, res) => {
 	res.send('Resale market is running...');
@@ -40,6 +40,8 @@ function verifyJWT(req, res, next) {
 		});
 	}
 }
+
+const stipe = new Stripe(process.env.STRIPE_SECRET);
 
 // function to create, read, update and delete data in database
 async function crudOperation() {
@@ -169,6 +171,64 @@ async function crudOperation() {
 				};
 				const products = await productsCollection.find(query).toArray();
 				res.send(products);
+			}
+		})
+
+		app.post('/payment/:id', verifyJWT, async (req, res) => {
+			const decodedEmail = req.decoded.email;
+			const buyerEmail = req.body.email;
+			if (decodedEmail !== buyerEmail) {
+				res.status(401).send({ message: 'unauthorized access' });
+			} else {
+				const paymentId = req.body.id;
+				const productId = req.params.id;
+
+				// checks price and email from database
+				const result = await productsCollection.findOne({ _id: ObjectId(productId) });
+				const price = result.resalePrice;
+				const buyer = result.buyer;
+
+				// can't pay if user did not book the item
+				if (buyer.email !== buyerEmail) {
+					res.status(401).send({ message: 'unauthorized access' });
+				} else {
+					// checks if already paid or not
+					const filter = { _id: ObjectId(productId) };
+					const paid = await productsCollection.findOne(filter);
+
+					// returns error if already paid
+					if (paid.buyer?.paymentId) {
+						res.json({ success: false });
+					} else {
+						// procced to payment
+						try {
+							const payment = await stipe.paymentIntents.create({
+								amount: price * 100,
+								currency: 'USD',
+								payment_method: paymentId,
+								confirm: true
+							})
+
+							// add payment id to database
+							const options = { upsert: true };
+							const updateProduct = {
+								$set: {
+									'buyer.paymentId': payment.id
+								}
+							}
+							const result = await productsCollection.updateOne(filter, updateProduct, options);
+							if (result.modifiedCount > 0) {
+								res.json({ success: true, paymentId: payment.id });
+							} else {
+								res.json({ success: false });
+							}
+
+						} catch (err) {
+							console.error(err);
+							res.json({ success: false });
+						}
+					}
+				}
 			}
 		})
 	}
