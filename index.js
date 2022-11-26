@@ -69,29 +69,34 @@ async function crudOperation() {
 		});
 
 		app.put('/booking', verifyJWT, async (req, res) => {
-			const productId = req.body.productId;
-			const userEmail = req.decoded.email;
-
-			const query = {
-				productId,
-				'buyer.email': userEmail
-			}
-
-			// checks if user booked this item previously or not
-			const previousOrder = await ordersCollection.findOne(query);
-			if (previousOrder) {
-				res.json({ message: 'already added' });
+			const decodedEmail = req.decoded.email;
+			if (decodedEmail !== req.body.buyerDetails.email) {
+				res.status(401).send({ message: 'unauthorized access' });
 			} else {
-				const buyer = req.body.buyerDetails;
-				const saveOrder = {
+				const productId = req.body.productId;
+				const userEmail = req.decoded.email;
+
+				const query = {
 					productId,
-					buyer
-				};
-				const result = await ordersCollection.insertOne(saveOrder);
-				if (result.acknowledged) {
-					res.json({ success: true });
+					'buyer.email': userEmail
+				}
+
+				// checks if user booked this item previously or not
+				const previousOrder = await ordersCollection.findOne(query);
+				if (previousOrder) {
+					res.json({ message: 'already added' });
 				} else {
-					res.json({ success: false });
+					const buyer = req.body.buyerDetails;
+					const saveOrder = {
+						productId,
+						buyer
+					};
+					const result = await ordersCollection.insertOne(saveOrder);
+					if (result.acknowledged) {
+						res.json({ success: true });
+					} else {
+						res.json({ success: false });
+					}
 				}
 			}
 		})
@@ -248,6 +253,22 @@ async function crudOperation() {
 				}
 			}
 		})
+
+		app.delete('/deleteUser', verifyJWT, async (req, res) => {
+			const decodedEmail = req.decoded.email;
+			const user = await usersCollection.findOne({ email: decodedEmail });
+			if (user.userType === 'admin') {
+				const result = await usersCollection.deleteOne({ email: req.headers.useremail });
+				if (result.deletedCount > 0) {
+					res.json({ success: true });
+				} else {
+					res.json({ success: false });
+				}
+			} else {
+				res.status(403).send('forbidden');
+			}
+		})
+
 	}
 	catch (err) {
 		console.log(err);
