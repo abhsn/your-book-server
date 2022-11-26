@@ -49,6 +49,8 @@ async function crudOperation() {
 		const categoriesCollection = client.db("resale-market").collection('categories');
 		const productsCollection = client.db('resale-market').collection('products');
 		const usersCollection = client.db('resale-market').collection('users');
+		const ordersCollection = client.db('resale-market').collection('orders');
+		const soldCollection = client.db('resale-market').collection('solds');
 
 		// sends all categories
 		app.get('/categories', async (req, res) => {
@@ -66,22 +68,41 @@ async function crudOperation() {
 			res.send(categories);
 		});
 
-		app.patch('/booking', async (req, res) => {
-			const buyer = req.body.buyerDetails;
+		app.put('/booking', verifyJWT, async (req, res) => {
 			const productId = req.body.productId;
-			const filter = { _id: ObjectId(productId) };
-			const options = { upsert: true };
-			const updateProduct = {
-				$set: {
+			const userEmail = req.decoded.email;
+
+			const query = {
+				productId,
+				'buyer.email': userEmail
+			}
+
+			// checks if user booked this item previously or not
+			const previousOrder = await ordersCollection.findOne(query);
+			if (previousOrder) {
+				res.json({ message: 'already added' });
+			} else {
+				const buyer = req.body.buyerDetails;
+				const saveOrder = {
+					productId,
 					buyer
+				};
+				const result = await ordersCollection.insertOne(saveOrder);
+				if (result.acknowledged) {
+					res.json({ success: true });
+				} else {
+					res.json({ success: false });
 				}
 			}
-			const result = await productsCollection.updateOne(filter, updateProduct, options);
-			if (result.modifiedCount > 0) {
-				res.send({ success: true });
-			} else {
-				res.send({ success: false });
-			}
+		})
+
+		app.get('/getProductDetails', verifyJWT, async (req, res) => {
+			const productId = req.query.id;
+			const query = {
+				_id: ObjectId(productId)
+			};
+			const result = await productsCollection.findOne(query);
+			res.send(result);
 		})
 
 		app.get('/jwt', async (req, res) => {
@@ -169,7 +190,7 @@ async function crudOperation() {
 				const query = {
 					'buyer.email': decodedEmail
 				};
-				const products = await productsCollection.find(query).toArray();
+				const products = await ordersCollection.find(query).toArray();
 				res.send(products);
 			}
 		})
@@ -177,6 +198,7 @@ async function crudOperation() {
 		app.post('/payment/:id', verifyJWT, async (req, res) => {
 			const decodedEmail = req.decoded.email;
 			const buyerEmail = req.body.email;
+
 			if (decodedEmail !== buyerEmail) {
 				res.status(401).send({ message: 'unauthorized access' });
 			} else {
@@ -185,48 +207,43 @@ async function crudOperation() {
 
 				// checks price and email from database
 				const result = await productsCollection.findOne({ _id: ObjectId(productId) });
+				const order = await ordersCollection.findOne({ productId, 'buyer.email': decodedEmail });
 				const price = result.resalePrice;
-				const buyer = result.buyer;
 
 				// can't pay if user did not book the item
-				if (buyer.email !== buyerEmail) {
+				if (decodedEmail !== order?.buyer?.email) {
 					res.status(401).send({ message: 'unauthorized access' });
 				} else {
-					// checks if already paid or not
-					const filter = { _id: ObjectId(productId) };
-					const paid = await productsCollection.findOne(filter);
 
-					// returns error if already paid
-					if (paid.buyer?.paymentId) {
-						res.json({ success: false });
-					} else {
-						// procced to payment
-						try {
-							const payment = await stipe.paymentIntents.create({
-								amount: price * 100,
-								currency: 'USD',
-								payment_method: paymentId,
-								confirm: true
-							})
+					// procced to payment
+					try {
+						const payment = await stipe.paymentIntents.create({
+							amount: price * 100,
+							currency: 'USD',
+							payment_method: paymentId,
+							confirm: true
+						})
 
-							// add payment id to database
-							const options = { upsert: true };
-							const updateProduct = {
-								$set: {
-									'buyer.paymentId': payment.id
-								}
+						// removes product from orders
+						const removed = await ordersCollection.deleteOne({ productId, 'buyer.email': decodedEmail });
+						if (removed.deletedCount > 0) {
+
+							// add item to sold collection
+							const item = {
+								productId,
+								paymentId: payment.id,
+								buyerEmail: decodedEmail
 							}
-							const result = await productsCollection.updateOne(filter, updateProduct, options);
-							if (result.modifiedCount > 0) {
+							const result = await soldCollection.insertOne(item);
+							if (result.acknowledged) {
 								res.json({ success: true, paymentId: payment.id });
 							} else {
 								res.json({ success: false });
 							}
-
-						} catch (err) {
-							console.error(err);
-							res.json({ success: false });
 						}
+					} catch (err) {
+						console.error(err);
+						res.json({ success: false });
 					}
 				}
 			}
