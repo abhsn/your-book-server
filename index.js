@@ -225,65 +225,72 @@ async function crudOperation() {
 					res.status(401).send({ message: 'unauthorized access' });
 				} else {
 
-					// procced to payment
-					try {
-						const payment = await stipe.paymentIntents.create({
-							amount: price * 100,
-							currency: 'USD',
-							payment_method: paymentId,
-							confirm: true
-						})
+					// check if product is already bought by other buyer
+					const product = await productsCollection.findOne({ _id: ObjectId(productId), status: 'sold' });
+					if (product) {
+						res.json({ success: false, message: 'already bought' });
+					} else {
+						// procced to payment
+						try {
+							const payment = await stipe.paymentIntents.create({
+								amount: price * 100,
+								currency: 'USD',
+								payment_method: paymentId,
+								confirm: true
+							})
 
-						const updateOrder = {
-							$set: {
-								status: 'paid'
-							}
-						}
-
-						const options = {
-							upsert: true
-						}
-
-						const result = await ordersCollection.updateOne(order, updateOrder, options);
-						if (result.modifiedCount > 0) {
-							const updateProduct = {
-								$set: { status: 'sold' }
+							const updateOrder = {
+								$set: {
+									status: 'paid'
+								}
 							}
 
-							const product = await productsCollection.updateOne({ _id: ObjectId(productId) }, updateProduct, { upsert: true });
+							const options = {
+								upsert: true
+							}
 
-							if (product.modifiedCount > 0) {
-								res.json({ success: true, paymentId: payment.id });
+							const result = await ordersCollection.updateOne(order, updateOrder, options);
+							if (result.modifiedCount > 0) {
+								const updateProduct = {
+									$set: { status: 'sold' }
+								}
+
+								const product = await productsCollection.updateOne({ _id: ObjectId(productId) }, updateProduct, { upsert: true });
+
+								if (product.modifiedCount > 0) {
+									res.json({ success: true, paymentId: payment.id });
+								} else {
+									res.json({ success: false });
+								}
 							} else {
 								res.json({ success: false });
 							}
-						} else {
+
+
+							// const notBuyer = await ordersCollection.find({ productId, status: null }).toArray();
+							// console.log(notBuyer)
+
+							// removes product from orders
+							// const removed = await ordersCollection.deleteOne({ productId, 'buyer.email': decodedEmail });
+							// if (removed.deletedCount > 0) {
+
+							// 	// add item to sold collection
+							// 	const item = {
+							// 		productId,
+							// 		paymentId: payment.id,
+							// 		buyerEmail: decodedEmail
+							// 	}
+							// 	const result = await soldCollection.insertOne(item);
+							// 	if (result.acknowledged) {
+							// 		res.json({ success: true, paymentId: payment.id });
+							// 	} else {
+							// 		res.json({ success: false });
+							// 	}
+							// }
+						} catch (err) {
+							console.error(err);
 							res.json({ success: false });
 						}
-
-						// const notBuyer = await ordersCollection.find({ productId, status: null }).toArray();
-						// console.log(notBuyer)
-
-						// removes product from orders
-						// const removed = await ordersCollection.deleteOne({ productId, 'buyer.email': decodedEmail });
-						// if (removed.deletedCount > 0) {
-
-						// 	// add item to sold collection
-						// 	const item = {
-						// 		productId,
-						// 		paymentId: payment.id,
-						// 		buyerEmail: decodedEmail
-						// 	}
-						// 	const result = await soldCollection.insertOne(item);
-						// 	if (result.acknowledged) {
-						// 		res.json({ success: true, paymentId: payment.id });
-						// 	} else {
-						// 		res.json({ success: false });
-						// 	}
-						// }
-					} catch (err) {
-						console.error(err);
-						res.json({ success: false });
 					}
 				}
 			}
@@ -342,6 +349,26 @@ async function crudOperation() {
 				res.send({ success: true });
 			} else {
 				res.send({ success: false });
+			}
+		})
+
+		app.post('/advertiseProduct/:id', verifyJWT, async (req, res) => {
+			const productId = req.params.id;
+			const email = req.decoded.email;
+			const query = { _id: ObjectId(productId), sellerEmail: email }
+			// update products
+			const product = await productsCollection.updateOne(query, { $set: { advertised: true } }, { upsert: true });
+			if (product.modifiedCount > 0) {
+				res.json({ success: true });
+			} else {
+				// check if already advertised
+				const product = await productsCollection.findOne(query);
+				if (product) {
+					// returns false if already advertised
+					res.json({ success: false, message: 'already advertised' });
+				} else {
+					res.json({ success: false })
+				}
 			}
 		})
 
