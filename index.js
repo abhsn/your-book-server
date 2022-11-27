@@ -140,7 +140,7 @@ async function crudOperation() {
 			} else {
 				const user = await usersCollection.findOne({ email: decodedEmail });
 				if (user.userType === 'admin') {
-					const cursor = await usersCollection.find({ userType: 'seller' }).project({ name: 1, email: 1 }).toArray();
+					const cursor = await usersCollection.find({ userType: 'seller' }).project({ name: 1, email: 1, isVerified: 1 }).toArray();
 					res.send(cursor);
 				} else {
 					res.status(403).send('forbidden');
@@ -311,6 +311,21 @@ async function crudOperation() {
 			}
 		})
 
+		app.post('/verifyUser', verifyJWT, async (req, res) => {
+			const decodedEmail = req.decoded.email;
+			const user = await usersCollection.findOne({ email: decodedEmail });
+			if (user.userType === 'admin') {
+				const result = await usersCollection.updateOne({ email: req.headers.useremail }, { $set: { isVerified: true } }, { upsert: true });
+				if (result.modifiedCount > 0) {
+					res.json({ success: true });
+				} else {
+					res.json({ success: false });
+				}
+			} else {
+				res.status(403).send('forbidden');
+			}
+		})
+
 		app.post('/addItem', verifyJWT, async (req, res) => {
 			if (req.decoded.email === req.body.sellerEmail) {
 				const user = await usersCollection.findOne({ email: req.decoded.email });
@@ -319,6 +334,9 @@ async function crudOperation() {
 					const category = await categoriesCollection.findOne({ _id: ObjectId(product.categoryId) });
 					product.categoryName = category.name;
 					product.time = new Date().getTime();
+					if (user.isVerified) {
+						product.isSellerVerified = true;
+					}
 					const result = await productsCollection.insertOne(product);
 					if (result.acknowledged) {
 						res.json({ success: true });
@@ -371,6 +389,11 @@ async function crudOperation() {
 				}
 			}
 		})
+
+		app.get('/getAdversied', async (req, res) => {
+			const advertised = await productsCollection.find({ advertised: true, status: null }).toArray();
+			res.send(advertised);
+		});
 
 	}
 	catch (err) {
