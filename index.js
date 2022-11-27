@@ -234,23 +234,43 @@ async function crudOperation() {
 							confirm: true
 						})
 
-						// removes product from orders
-						const removed = await ordersCollection.deleteOne({ productId, 'buyer.email': decodedEmail });
-						if (removed.deletedCount > 0) {
-
-							// add item to sold collection
-							const item = {
-								productId,
-								paymentId: payment.id,
-								buyerEmail: decodedEmail
-							}
-							const result = await soldCollection.insertOne(item);
-							if (result.acknowledged) {
-								res.json({ success: true, paymentId: payment.id });
-							} else {
-								res.json({ success: false });
+						const updateOrder = {
+							$set: {
+								status: 'paid'
 							}
 						}
+
+						const options = {
+							upsert: true
+						}
+
+						const result = await ordersCollection.updateOne(order, updateOrder, options);
+						if (result.modifiedCount > 0) {
+							res.json({ success: true, paymentId: payment.id });
+						} else {
+							res.json({ success: false });
+						}
+
+						// const notBuyer = await ordersCollection.find({ productId, status: null }).toArray();
+						// console.log(notBuyer)
+
+						// removes product from orders
+						// const removed = await ordersCollection.deleteOne({ productId, 'buyer.email': decodedEmail });
+						// if (removed.deletedCount > 0) {
+
+						// 	// add item to sold collection
+						// 	const item = {
+						// 		productId,
+						// 		paymentId: payment.id,
+						// 		buyerEmail: decodedEmail
+						// 	}
+						// 	const result = await soldCollection.insertOne(item);
+						// 	if (result.acknowledged) {
+						// 		res.json({ success: true, paymentId: payment.id });
+						// 	} else {
+						// 		res.json({ success: false });
+						// 	}
+						// }
 					} catch (err) {
 						console.error(err);
 						res.json({ success: false });
