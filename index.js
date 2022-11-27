@@ -63,7 +63,7 @@ async function crudOperation() {
 
 		// sends items of specific category
 		app.get('/category/:id', verifyJWT, async (req, res) => {
-			const query = { categoryId: req.params.id };
+			const query = { categoryId: req.params.id, status: null };
 			const cursor = productsCollection.find(query);
 			const categories = await cursor.toArray();
 			res.send(categories);
@@ -246,7 +246,17 @@ async function crudOperation() {
 
 						const result = await ordersCollection.updateOne(order, updateOrder, options);
 						if (result.modifiedCount > 0) {
-							res.json({ success: true, paymentId: payment.id });
+							const updateProduct = {
+								$set: { status: 'sold' }
+							}
+
+							const product = await productsCollection.updateOne({ _id: ObjectId(productId) }, updateProduct, { upsert: true });
+
+							if (product.modifiedCount > 0) {
+								res.json({ success: true, paymentId: payment.id });
+							} else {
+								res.json({ success: false });
+							}
 						} else {
 							res.json({ success: false });
 						}
@@ -296,18 +306,42 @@ async function crudOperation() {
 
 		app.post('/addItem', verifyJWT, async (req, res) => {
 			if (req.decoded.email === req.body.sellerEmail) {
-				const product = { ...req.body };
-				const category = await categoriesCollection.findOne({ _id: ObjectId(product.categoryId) });
-				product.categoryName = category.name;
-				product.time = new Date().getTime();
-				const result = await productsCollection.insertOne(product);
-				if (result.acknowledged) {
-					res.json({ success: true });
+				const user = await usersCollection.findOne({ email: req.decoded.email });
+				if (user.userType === 'seller') {
+					const product = { ...req.body };
+					const category = await categoriesCollection.findOne({ _id: ObjectId(product.categoryId) });
+					product.categoryName = category.name;
+					product.time = new Date().getTime();
+					const result = await productsCollection.insertOne(product);
+					if (result.acknowledged) {
+						res.json({ success: true });
+					} else {
+						res.json({ success: false });
+					}
 				} else {
-					res.json({ success: false });
+					res.status(401).send('unauthorized access');
 				}
 			} else {
 				res.status(401).send('unauthorized access');
+			}
+		})
+
+		app.get('/myProducts', verifyJWT, async (req, res) => {
+			const email = req.decoded.email;
+			const query = { sellerEmail: email };
+			const result = await productsCollection.find(query).toArray();
+			res.send(result);
+		})
+
+		app.delete('/deleteProduct/:id', verifyJWT, async (req, res) => {
+			const email = req.decoded.email;
+
+			// passing email to check if seller is posted or not
+			const result = await productsCollection.deleteOne({ _id: ObjectId(req.params.id), sellerEmail: email });
+			if (result.deletedCount > 0) {
+				res.send({ success: true });
+			} else {
+				res.send({ success: false });
 			}
 		})
 
