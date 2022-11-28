@@ -51,7 +51,16 @@ async function crudOperation() {
 		const productsCollection = client.db('resale-market').collection('products');
 		const usersCollection = client.db('resale-market').collection('users');
 		const ordersCollection = client.db('resale-market').collection('orders');
-		const soldCollection = client.db('resale-market').collection('solds');
+		// const soldCollection = client.db('resale-market').collection('solds');
+
+		async function verifyAdmin(email) {
+			const result = await usersCollection.findOne({ email });
+			if (result?.userType === 'admin') {
+				return true;
+			} else {
+				false;
+			}
+		}
 
 		// sends all categories
 		app.get('/categories', async (req, res) => {
@@ -319,8 +328,8 @@ async function crudOperation() {
 
 		app.post('/verifyUser', verifyJWT, async (req, res) => {
 			const decodedEmail = req.decoded.email;
-			const user = await usersCollection.findOne({ email: decodedEmail });
-			if (user.userType === 'admin') {
+			const isAdmin = await verifyAdmin(decodedEmail);
+			if (isAdmin) {
 				const result = await usersCollection.updateOne({ email: req.headers.useremail }, { $set: { isVerified: true } }, { upsert: true });
 				if (result.modifiedCount > 0) {
 					res.json({ success: true });
@@ -406,7 +415,6 @@ async function crudOperation() {
 			if (decodedEmail === req.body.email) {
 				const productId = req.body.productId;
 				const result = await productsCollection.updateOne({ _id: ObjectId(productId) }, { $set: { reported: [req.body.email] } }, { upsert: true });
-				console.log(result)
 				if (result.modifiedCount > 0) {
 					res.json({ success: true });
 				} else {
@@ -414,6 +422,21 @@ async function crudOperation() {
 				}
 			} else {
 				res.status(401).send('unauthorized access');
+			}
+		})
+
+		app.delete('/deleteReported/:id', verifyJWT, async (req, res) => {
+			const email = req.decoded.email;
+			const isAdmin = await verifyAdmin(email);
+			if (isAdmin) {
+				const result = await productsCollection.deleteOne({ _id: ObjectId(req.params.id) });
+				if (result.deletedCount > 0) {
+					res.json({ success: true });
+				} else {
+					res.json({ success: false });
+				}
+			} else {
+				res.status(401).send({ message: 'unauthorized access' });
 			}
 		})
 
