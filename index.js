@@ -126,8 +126,14 @@ async function crudOperation() {
 		app.post('/users', async (req, res) => {
 			const user = req.body;
 			if (user.userType === 'buyer' || user.userType === 'seller') {
-				const result = await usersCollection.insertOne(user);
-				res.send(result);
+				// checks if user is already exists
+				const previousUser = await usersCollection.findOne({ email: user.email });
+				if (!previousUser) {
+					const result = await usersCollection.insertOne(user);
+					res.send(result);
+				} else {
+					res.json({ message: 'already exists' });
+				}
 			} else {
 				res.status(403).send('forbidden');
 			}
@@ -170,7 +176,7 @@ async function crudOperation() {
 			} else {
 				const user = await usersCollection.findOne({ email: decodedEmail });
 				if (user.userType === 'admin') {
-					const cursor = await productsCollection.find({ reported: true }).project({ buyer: 0 }).toArray();
+					const cursor = await productsCollection.find({ reported: { $type: "array" } }).project({ buyer: 0 }).toArray();
 					res.send(cursor);
 				} else {
 					res.status(403).send('forbidden');
@@ -394,6 +400,22 @@ async function crudOperation() {
 			const advertised = await productsCollection.find({ advertised: true, status: null }).toArray();
 			res.send(advertised);
 		});
+
+		app.post('/reportToAdmin', verifyJWT, async (req, res) => {
+			const decodedEmail = req.decoded.email;
+			if (decodedEmail === req.body.email) {
+				const productId = req.body.productId;
+				const result = await productsCollection.updateOne({ _id: ObjectId(productId) }, { $set: { reported: [req.body.email] } }, { upsert: true });
+				console.log(result)
+				if (result.modifiedCount > 0) {
+					res.json({ success: true });
+				} else {
+					res.json({ success: false });
+				}
+			} else {
+				res.status(401).send('unauthorized access');
+			}
+		})
 
 	}
 	catch (err) {
